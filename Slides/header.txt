@@ -1,0 +1,47 @@
+\usepackage{amsmath}
+\usepackage{bm}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{xcolor,colortbl}
+
+\usepackage{eso-pic}
+
+\newcommand\AtPagemyLowerRight[1]{\AtPageLowerLeft{%
+\put(\LenToUnit{0.91\paperwidth},\LenToUnit{0.001\paperheight}){#1}}}
+
+%\AddToShipoutPictureFG{
+%  \AtPagemyLowerRight{{\includegraphics[width=1cm,keepaspectratio]{white_transparent_logo.png}}}
+%}%
+
+\usepackage{caption}
+\captionsetup[figure]{labelformat=empty}
+
+\setbeamertemplate{title page}[empty]
+
+\definecolor{NYUpurple}{RGB}{88,15,139}
+\setbeamercolor{structure}{fg=NYUpurple}
+
+\renewcommand{\thefootnote}{$\ast$} 
+\setbeamertemplate{itemize subitem}[circle]
+
+
+\setlength{\abovedisplayskip}{16pt}
+\setlength{\belowdisplayskip}{16pt}
+  
+\newcommand{\fblock}[1]{\begin{frame}{#1}\end{frame}}
+
+\definecolor{BrickRed}{HTML}{B84226}
+
+\setbeamertemplate{navigation symbols}{} %remove navigation symbols
+\setbeamercolor{alerted text}{fg=BrickRed}
+
+\newcommand{\indep}{\rotatebox[origin=c]{90}{$\models$}}
+\newcommand{\rb}[1]{\textbf{\textcolor{BrickRed}{#1}}}
+
+\AtBeginPart{}
+\AtBeginSection{}
+\AtBeginSubsection{}
+\AtBeginSubsubsection{}
+\setlength{\emergencystretch}{0em}
+\setlength{\parskip}{10pt}

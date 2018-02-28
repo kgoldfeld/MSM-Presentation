@@ -1,0 +1,253 @@
+---
+title: "Using simulation to understand marginal structural modeling"
+graphics: yes
+output: 
+  beamer_presentation: 
+    theme: "Pittsburgh"
+    slide_level: 2
+    includes:
+      in_header: ~/Box Sync/R Projects/MSM Talk/Slides/header.txt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.align = 'center', warning = FALSE)
+options(width=40)
+library(rmarkdown, quietly = TRUE, warn.conflicts = FALSE)
+library(MASS,warn.conflicts = FALSE)
+library(tiff, warn.conflicts = FALSE)
+library(gridExtra,warn.conflicts = FALSE)
+library(lme4, quietly=TRUE,warn.conflicts = FALSE)
+library(Hmisc, quietly=TRUE)
+library(xtable, quietly=TRUE,warn.conflicts = FALSE)
+library(MatchIt)
+library(Matching, quietly=TRUE,warn.conflicts = FALSE)
+library(stargazer, quietly=TRUE, warn.conflicts = FALSE)
+library(data.table)
+
+theme_ksg <- function() {
+  theme(
+    panel.background = element_rect(colour = "black", fill = "white"),
+    axis.ticks =  element_line(colour = "black"),
+    panel.spacing = unit(0.25, "lines"),  # requires package grid
+    plot.title = element_text(size = 12,vjust=.5,hjust=0),
+    panel.border = element_rect(fill = NA, colour="gray90"),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank()
+  )
+}
+```
+## What is the problem?
+
+![](img/Observed_MSM.png)
+
+##
+
+$$E(Y^1 - Y^0)$$
+
+##
+
+$$E(Y^1 - Y^0) = E(Y^1) - E(Y^0)$$
+
+##
+
+$$ E(Y^0) \stackrel{?}{=} E(Y^0 | A=0)$$
+\ 
+
+$$ E(Y^1)  \stackrel{?}{=} E(Y^1 | A=1)$$
+
+##
+
+$$ E(Y^0) = E(Y | A = 0)$$
+\ 
+
+$$ E(Y^1)  = E(Y | A = 1)$$
+
+## 
+
+$$E(Y^0) \ne E(Y^0 | A=0)$$
+\ 
+
+$$ E(Y^1)  \ne E(Y^1 | A=1) $$
+
+##
+
+$$
+\begin{aligned}
+E(Y^0 | L=l) &= E(Y | A = 0 \text{ and } L=l) \\
+\\ 
+\\
+E(Y^1 | L=l) &= E(Y | A = 1 \text{ and } L=l)
+ \end{aligned}
+$$ 
+
+## Simple simuluation
+
+![](img/SimpleConfounding.png)
+
+##
+
+![](img/logoddsNoAvg1.png)
+
+##
+
+![](img/logoddsNoAvg.png)
+
+##
+
+![](img/logoddsAvg1.png)
+
+##
+
+![](img/logoddsAvg.png)
+
+##
+
+![](img/PO_flow_large.png)
+
+## Conditional log-odds ratios
+
+$$LOR_{A=1 \textbf{ vs  } A=0|L = 0} = log \left (\frac{0.182/0.818}{0.076/0.924} \right)=log(2.705) = 0.995$$
+
+\ 
+
+$$LOR_{A=1 \textbf{ vs  } A=0|L = 1} = log \left (\frac{0.562/0.438}{0.324/0.676} \right)=log(2.677) = 0.984$$
+
+## Marginal log-odds ratios
+
+$$P(Y=1|A=0) = 0.73\times0.076 + 0.27\times0.324 = 0.143$$
+
+\ 
+
+$$P(Y=1|A=1) = 0.73\times0.182 + 0.27\times0.562 = 0.285$$
+
+\ 
+
+$$LOR_{A=1 \textbf{ vs  } A=0} = log \left (\frac{0.285/0.715}{0.143/0.857} \right)=log(2.389) = 0.871$$
+
+##
+
+![](img/Obs_flow_large.png)
+
+## Crude log-odds ratio
+
+$$P(Y=1|A=0) = \frac{500\times0.076 + 90\times0.324}{500+90}=0.114$$
+
+\ 
+
+$$P(Y=1|A=1) = \frac{230\times0.182 + 180\times0.562}{230+180}=0.349$$
+
+\ 
+
+$$LOR_{A=1 \textbf{ vs  } A=0} = log \left (\frac{0.349/0.651}{0.114/0.886} \right)=log(4.170) = 1.420$$
+
+##
+
+$$IPW = \frac{1}{P(A=a | L=l)}$$
+
+\ 
+
+\begin{center}
+What assumptions do we need to make?
+\end{center}
+
+##
+
+![](img/Weights.png)
+
+## After applying weights
+
+```{r, out.width = "150px"}
+knitr::include_graphics("img/PO_flow_large.png")
+```
+
+##
+
+\begin{center}
+\huge{Simulation}
+\end{center}
+
+##
+
+![](img/ColliderNoAdjust.png)
+
+##
+
+![](img/ColliderAdjust.png)
+
+##
+
+\begin{center}
+\huge{Simulation}
+\end{center}
+
+##
+
+![](img/Observed_MSM.png)
+
+##
+
+![](img/IPW_MSM_Ind.png)
+
+## Potential potential outcomes
+
+$$
+\begin{aligned}
+E^i_1 = Y^i_{10} - Y^i_{00} \\ 
+\\ 
+E^i_2 = Y^i_{01} - Y^i_{00} \\
+\\ 
+E^i_3 = Y^i_{11} - Y^i_{00}
+\end{aligned}
+$$ 
+
+## Starting, never stopping
+
+$$
+\begin{aligned}
+E_1 = Y_{1111} - Y_{0000} \\ 
+\\ 
+E_2 = Y_{0111} - Y_{0000} \\
+\\
+E_3 = Y_{0011} - Y_{0000} \\
+\\
+E_4 = Y_{0001} - Y_{0000}
+\end{aligned}
+$$
+
+
+##
+
+![](img/IPW_MSM_obs_color.png)
+
+##
+
+$$
+IPW = \frac{1}{P(A_0=a_0,A_1 = a_1| L_0=l_0, L_1=l_1)}
+$$
+
+##
+
+$$
+\begin{aligned}
+IPW &= \frac{1}{P(A_0=a_0,A_1 = a_1| L_0=l_0, L_1=l_1)} \\
+\\ 
+\\
+&= \frac{1}{P(A_0=a_0 | L_0=l_0) \times P(A_1=a_1 | L_0=l_0, A_0=a_0, L_1=l_1)}
+\end{aligned}
+$$
+
+##
+
+![](img/dataGen_MSM.png)
+
+##
+
+\begin{center}
+\huge{Simulation}
+\end{center}
+
+## Key references
+
+Havercroft, W. G., and V. Didelez. "Simulating from marginal structural models with time‐dependent confounding." Statistics in medicine 31.30 (2012): 4190-4206.
+
+Robins, James M., Miguel Angel Hernan, and Babette Brumback. "Marginal structural models and causal inference in epidemiology." (2000): 550-560.

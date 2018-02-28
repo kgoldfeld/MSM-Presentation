@@ -1,0 +1,596 @@
+---
+title: "Simulation and marginal structural models"
+output: html_notebook
+---
+
+```{r}
+library(simstudy)
+
+def <- defData(varname = "x1", formula = "1;12", 
+               dist = "uniformInt")
+def <- defData(def, varname="y1", formula = "-0.2 + 0.2 * x1", 
+               dist="poisson", link="log")
+
+def
+
+```
+
+```{r}
+# generate data
+
+set.seed(50)
+
+dt <- genData(1001, def)
+
+head(dt)
+```
+
+```{r}
+library(ggplot2)
+
+lmfit <- lm(y1~x1,data=dt)
+dt[, predlm := predict(lmfit)]
+
+ggplot(dt,aes(y=y1,x=x1)) +
+  geom_jitter(width = 0.25, color = "grey60", size = 1) +
+  geom_line(aes(x=x1, y=predlm), color = "#0932c0", size = 2) +
+  scale_x_continuous(breaks = c(1:12)) +
+  theme(panel.grid.minor = element_blank())
+```
+
+```{r}
+glmfit <- glm(y1~x1, data=dt, family=poisson(log))
+summary(glmfit)
+```
+
+```{r}
+dt[, predglm := predict(glmfit, type = "response")]
+ggplot(dt,aes(y=y1,x=x1)) +
+  geom_jitter(width = 0.25, color = "grey60", size = 1) +
+  geom_line(aes(x=x1, y=predlm), color = "#0932c0", size = 1, alpha = .3) +
+  scale_x_continuous(breaks = c(1:12)) +
+  theme(panel.grid.minor = element_blank()) + 
+  geom_line(aes(x=x1, y=predglm), color = "#c03b09", size = 2)
+```
+
+<!-- Go to slides -->
+
+```{r}
+defC <- defData(varname = "e", formula = 0, variance = 2, 
+                dist = "normal")
+defC <- defData(defC, varname = "L", formula = 0.6, 
+                dist = "binary")
+defC <- defData(defC, varname = "Y0", formula = "1 + 4 * L + e", 
+                dist = "nonrandom")
+defC <- defData(defC, varname = "Y1", formula = "5 + 4 * L + e", 
+                dist = "nonrandom")
+defC <- defData(defC, varname = "A", formula = "0.3 + 0.3 * L", 
+                dist = "binary")
+defC <- defData(defC, varname = "Y", formula = "Y0 * (A==0) + Y1 * (A==1)", 
+                dist = "nonrandom")
+
+defC
+```
+
+```{r}
+set.seed(2017)
+
+dtC <- genData(n = 2000000, defC)
+dtC[1:10]
+```
+
+```{r message=FALSE, warning=FALSE}
+getDensity <- function(vector, weights = NULL) {
+  
+  if (!is.vector(vector)) stop("Not a vector!")
+  
+  if (is.null(weights)) {
+    avg <- mean(vector)
+  } else {
+    avg <- weighted.mean(vector, weights)
+  }
+  
+  close <- min(which(avg < density(vector)$x))
+  x <- density(vector)$x[close]
+  if (is.null(weights)) {
+    y = density(vector)$y[close]
+  } else {
+    y = density(vector, weights = weights)$y[close]
+  }
+  return(data.table(x = x, y = y))
+  
+}
+
+plotDens <- function(dtx, var, xPrefix, title, textL = NULL, weighted = FALSE) {
+  
+  dt <- copy(dtx)
+  
+  if (weighted) {
+    dt[, nIPW := IPW/sum(IPW)]
+    dMarginal <- getDensity(dt[, get(var)], weights = dt$nIPW)
+  } else {
+    dMarginal <- getDensity(dt[, get(var)])
+  }
+  
+  d0 <- getDensity(dt[L==0, get(var)])
+  d1 <- getDensity(dt[L==1, get(var)])
+
+  dline <- rbind(d0, dMarginal, d1)
+  
+  brk <- round(dline$x, 1)
+  
+  p <- ggplot(aes(x=get(var)), data=dt) +
+    geom_density(data=dt[L==0], fill = "#ce682f", alpha = .4) +
+    geom_density(data=dt[L==1], fill = "#96ce2f", alpha = .4)
+  
+  if (weighted) {
+    p <- p + geom_density(aes(weight = nIPW),
+                              fill = "#2f46ce", alpha = .8)
+  } else p <- p + geom_density(fill = "#2f46ce", alpha = .8)
+  
+  p <- p +  geom_segment(data = dline, aes(x = x, xend = x, 
+                                   y = 0, yend = y), 
+                 size = .7, color =  "white", lty=3) +
+            annotate(geom="text", x = 12.5, y = .24, 
+             label = title, size = 5, fontface = 2) +
+            scale_x_continuous(limits = c(-2, 15), 
+                       breaks = brk,
+                       name = paste(xPrefix, var)) +
+            theme(panel.grid = element_blank(),
+                  axis.text.x = element_text(size = 12),
+                  axis.title.x = element_text(size = 13)
+    )
+
+    if (!is.null(textL))  {
+      p <- p + 
+        annotate(geom = "text", x = textL[1], y = textL[2], 
+                 label = "L=0", size = 4, fontface = 2) +
+        annotate(geom = "text", x = textL[3], y = textL[4], 
+                 label="L=1", size = 4, fontface = 2) +
+        annotate(geom = "text", x = textL[5], y = textL[6], 
+                 label="Population distribution", size = 4, fontface = 2)
+    } 
+    
+    return(p)
+}
+```
+
+```{r, message=FALSE, warning=FALSE}
+library(gridExtra)
+
+p0FULL <- plotDens(dtC, "Y0", "Potential outcome", "Full\npopulation", 
+                   c(1, .24, 5, .22, 2.6, .06))
+p1FULL <- plotDens(dtC, "Y1", "Potential outcome", "Full\npopulation")
+
+grid.arrange(p0FULL, p1FULL)
+```
+
+#### Marginal distribution of potential outcome changes as distribution of L changes
+
+```{r}
+defC <- updateDef(defC, changevar = "L", newformula = 0.4)
+defC
+```
+
+```{r, warning=FALSE, message=FALSE}
+set.seed(2017)
+dtC <- genData(n = 2000000, defC)
+
+p0FULL <- plotDens(dtC, "Y0", "Potential outcome", "Full\npopulation")
+p1FULL <- plotDens(dtC, "Y1", "Potential outcome", "Full\npopulation")
+
+grid.arrange(p0FULL, p1FULL)
+```
+
+```{r message=FALSE, warning=FALSE}
+# compare Y0 with unexposed group only
+pUnexp <- plotDens(dtC[A==0], "Y", "Observed", "Unexposed\nonly")
+grid.arrange(p0FULL, pUnexp)
+```
+
+```{r message=FALSE, warning=FALSE}
+# compare Y1 with exposed only
+pExp   <- plotDens(dtC[A==1], "Y", "Observed", "Exposed\nonly")
+grid.arrange(p1FULL, pExp)
+```
+
+#### Distribution of L in total population
+
+```{r}
+dtC[, .(propLis1 = mean(L))]
+```
+
+#### Distribution of L in each group
+
+```{r}
+dtC[, .(propLis1 = mean(L)), keyby = A]
+```
+
+#### When treatment is independent of the confounder
+
+```{r}
+defC <- updateDef(defC, "A", newformula = 0.5) # change data generation
+dtC <- genData(n = 2000000, defC)
+
+dtC[, .(propLis1 = mean(L))]            # population/marginal props
+```
+
+```{r}
+dtC[, .(propLis1 = mean(L)), keyby = A] # subgroup proportions
+```
+
+```{r, message=FALSE, warning=FALSE}
+grid.arrange(plotDens(dtC, "Y0", "Potential outcome", "Population", 
+                         c(1, .24, 5, .22, 2.6, .06)),
+             plotDens(dtC[A==0], "Y", "Observed", "Unexposed"),
+             plotDens(dtC, "Y1", "Potential outcome", "Population"),
+             plotDens(dtC[A==1], "Y", "Observed", "Exposed"),
+             nrow = 2
+)
+```
+
+#### Estimation of causal effects (now with confounding)
+
+Generating a smaller data set, we estimate the causal effects using simple calculations and linear regression - the true average (marginal) causal effect from the average difference in potential outcomes for the entire population:
+
+```{r, message = FALSE}
+
+# change back to confounding
+
+defC <- updateDef(defC, "A", newformula = ".3 + .3 * L")
+defC <- updateDef(defC, "Y1", newformula = "3 + 4 * L + e")
+
+defC
+```
+
+
+```{r}
+dtC <- genData(2500, defC)
+dtC[, mean(Y1 - Y0)]
+```
+
+#### And the true average causal effects conditional on the covariate $L$
+
+```{r}
+dtC[, mean(Y1 - Y0), keyby = L]
+```
+
+#### Biased estimate of causal effect
+
+```{r}
+library(broom)
+
+tidy(lm(Y ~ A, data = dtC))
+```
+
+#### Unbiased estimate of causal effect
+
+```{r}
+tidy(lm(Y ~ L + A , data = dtC))
+```
+
+<!-- Return to slides -->
+
+## Binary outcomes
+
+```{r}
+defB <- defData(varname = "L", formula =0.27, 
+                dist = "binary")
+defB <- defData(defB, varname = "Y0", formula = "-2.5 + 1.75*L", 
+                dist = "binary", link = "logit")
+defB <- defData(defB, varname = "Y1", formula = "-1.5 + 1.75*L", 
+                dist = "binary", link = "logit")
+defB <- defData(defB, varname = "A", formula = "0.315 + 0.352 * L", 
+                dist = "binary")
+defB <- defData(defB, varname = "Y", formula = "Y0 + A * (Y1 - Y0)", 
+                dist = "nonrandom")
+
+defB
+```
+
+```{r}
+# generate the data
+
+set.seed(2002)
+dtB <- genData(200000, defB)
+dtB[1:6]
+```
+
+```{r}
+odds <- function (p) {
+    return((p/(1 - p)))
+}
+
+# log odds ratio for entire sample (marginal LOR) - true effect
+
+dtB[, log( odds( mean(Y1) ) / odds( mean(Y0) ) )]
+
+```
+
+#### Conditional log-odds using logistic regression
+
+```{r}
+tidy(glm(Y ~ L + A  , data = dtB, family="binomial")) 
+```
+
+#### True conditional log-odds
+
+```{r}
+dtB[, .(LOR = log( odds( mean(Y1) ) / odds( mean(Y0) ) ) ), keyby = L]
+```
+
+#### Wrong way to estimate marginal effect
+
+```{r}
+tidy(glm(Y ~ A , data = dtB, family="binomial"))
+```
+
+#### Marginal structural model
+
+Estimate probability of exposure to A
+
+```{r, warning = FALSE}
+exposureModel <- glm(A ~ L, data = dtB, family = "binomial")
+dtB[, pA := predict(exposureModel, type = "response")]
+dtB[1:6]
+```
+
+#### Probability of treatment received
+
+```{r, warning = FALSE}
+
+# Define two new columns
+
+defB2 <- defDataAdd(varname = "pA_actual", 
+                    formula = "(A * pA) + ((1 - A) * (1 - pA))", 
+                    dist = "nonrandom")
+
+defB2 <- defDataAdd(defB2, varname = "IPW", 
+                    formula = "1/pA_actual", 
+                    dist = "nonrandom")
+
+dtB <- addColumns(defB2, dtB)
+
+dtB[1:6]
+```
+
+#### Estimate weighted result
+
+```{r, warning=FALSE}
+tidy(glm(Y ~ A , data = dtB, family="binomial", weights = IPW)) 
+```
+
+<!-- Return to slides -->
+
+#### Collider
+
+```{r}
+# read in definitions
+
+defCollide <- defRead("collider.csv")
+defCollide
+```
+
+```{r}
+
+# generate data
+
+set.seed(136)
+dt <- genData(1200, defCollide)
+
+dt[1:10]
+```
+
+```{r}
+# unadjusted model
+
+tidy(lm(Y ~ A, data = dt))
+```
+
+```{r}
+
+# adjusted model
+
+tidy(lm(Y ~ L + A, data = dt))
+```
+
+```{r}
+tidy(lm(Y ~ U + L + A, data = dt))
+```
+
+```{r}
+# selection bias
+
+defS <- defDataAdd(varname = "S", formula = "-2 + 2.2*L", dist = "binary", link = "logit")
+dt <- addColumns(defS, dt)
+
+dSelect <- dt[S==1]
+dSelect[, mean(L)]
+```
+
+```{r}
+tidy(lm(Y ~ A, data = dSelect))
+```
+
+<!-- Return to slides -->
+
+#### Longitudinal data - repeated treatment
+
+First - define all the data
+
+```{r, message = FALSE}
+defA0 <- defData(varname = "U", formula = "0;1", dist = "uniform")
+defA0 <- defData(defA0, varname = "e", formula = 0, 
+                 variance = 4, dist = "normal")
+defA0<- defData(defA0, varname = "L0", formula = "-2.66 + 3*U", 
+                dist = "binary", link = "logit")
+
+addA0 <- defDataAdd(varname = "L1", 
+                    formula = "-1.2 + 3*U + 0.2 * L0 - 2.5 * A0", 
+                    dist= "binary", link="logit")
+
+addA1 <- defDataAdd(varname = "Y_PO", 
+                    formula = "39.95 + U * 40 - A0 * 8 - A1 * 12 + e", 
+                    dist = "nonrandom")
+
+addObsA0 <- defDataAdd(varname = "A0", 
+                    formula = "0.3 + L0 * 0.2", dist = "binary" )
+
+addObsA1 <- defDataAdd(varname = "A1", 
+                    formula = "0.3 + L1 * 0.2 + A0 * .2", dist = "binary")
+```
+
+#### Next - generate the potential outcome data
+
+```{r}
+set.seed(1234)
+dtA0 <- genData(n = 50000, defA0)
+
+dtA0 <- addPeriods(dtA0, 2)
+setnames(dtA0, "period", "A0")
+
+dtA0 <- addColumns(addA0, dtOld = dtA0)
+dtA1 <- addPeriods(dtA0, 2)
+setnames(dtA1, "period", "A1")
+
+dtPO <- addColumns(addA1, dtA1)
+
+dtPO[id %in% c(1321, 18980)]
+```
+
+#### Now, generate the observed data only
+
+```{r}
+### Create observed data
+
+dt <- dtPO[A0 == 0 & A1 == 0, .(id, L0)]
+dt <- addColumns(addObsA0, dt)
+
+setkeyv(dt, c("id", "A0"))
+setkeyv(dtPO, c("id", "A0"))
+
+dt <- merge(dt, dtPO[, .(id, A0, L1, A1) ], by = c("id", "A0"))
+dt <- dt[A1 == 0, .(id, L0, A0, L1)]
+
+dt <- addColumns(addObsA1, dt)
+
+# Merge to get potential outcome that matches actual path
+
+setkey(dt, id, L0, A0, L1, A1)
+setkey(dtPO, id, L0, A0, L1, A1)
+dtObs <- merge(dt, dtPO[,.(id, L0, A0, L1, A1, Y = Y_PO)])
+
+dtObs[id %in% c(1321, 18980)]
+```
+
+#### True average causal effect
+
+```{r}
+Y_00 <- dtPO[A0 == 0 & A1 == 0, mean(Y_PO)]
+Y_10 <- dtPO[A0 == 1 & A1 == 0, mean(Y_PO)]
+Y_01 <- dtPO[A0 == 0 & A1 == 1, mean(Y_PO)]
+Y_11 <- dtPO[A0 == 1 & A1 == 1, mean(Y_PO)]
+
+c(Y_10 - Y_00,  Y_01 - Y_00, Y_11 - Y_00)
+```
+
+#### Biased estimate from observed data
+
+```{r}
+
+Y_00 <- dtObs[A0 == 0 & A1 == 0, mean(Y)]
+Y_10 <- dtObs[A0 == 1 & A1 == 0, mean(Y)]
+Y_01 <- dtObs[A0 == 0 & A1 == 1, mean(Y)]
+Y_11 <- dtObs[A0 == 1 & A1 == 1, mean(Y)]
+
+c(Y_10 - Y_00,  Y_01 - Y_00, Y_11 - Y_00)
+```
+
+#### Same result from unadjusted model
+
+```{r}
+tidy(lmfit <- lm(Y ~ A0 + A1, data = dtObs))
+```
+
+#### Adjusting for confounders (effect of A0 = -8, A1 = -12)
+
+```{r}
+tidy(lm(Y ~ L0 + L1 + A0 + A1, data = dtObs))
+```
+
+#### Maybe if we just adjust for L1?
+
+```{r}
+tidy(lm(Y ~ L1 + A0 + A1, data = dtObs))
+```
+
+#### Adjust L0 only?
+
+```{r}
+tidy(lm(Y ~ L0 + A0 + A1, data = dtObs))
+```
+
+## IPW
+
+```{r}
+
+# estimate P(A0|L0) and P(A1|L0, A0, L1)
+
+fitA0 <- glm(A0 ~ L0, data = dtObs, family=binomial)
+fitA1 <- glm(A1 ~ L0 + A0 + L1, data = dtObs, family=binomial)
+
+dtObs[, predA0 := predict(fitA0, type = "response")]
+dtObs[, predA1 := predict(fitA1, type = "response")]
+
+# function to convert propenisty scores to IPW
+
+getWeight <- function(predA0, actA0, predA1, actA1) {
+  predActA0 <- actA0*predA0 + (1-actA0)*(1-predA0)
+  predActA1 <- actA1*predA1 + (1-actA1)*(1-predA1)
+  
+  p <- predActA0 * predActA1
+  return(1/p)
+}
+
+dtObs[, wgt := getWeight(predA0, A0, predA1, A1)]
+dtObs[id %in% c(1321, 18980)]
+```
+
+#### Fit weighted model
+
+```{r}
+tidy(lm(Y ~ A0 + A1, weights = wgt, data = dtObs))
+```
+
+#### Mon-parametric estimation
+
+```{r}
+Y_00 <- dtObs[A0 == 0 & A1 == 0, weighted.mean(Y, wgt)]
+Y_10 <- dtObs[A0 == 1 & A1 == 0, weighted.mean(Y, wgt)]
+Y_01 <- dtObs[A0 == 0 & A1 == 1, weighted.mean(Y, wgt)]
+Y_11 <- dtObs[A0 == 1 & A1 == 1, weighted.mean(Y, wgt)]
+
+round(c(Y_10 - Y_00,  Y_01 - Y_00, Y_11 - Y_00), 2)
+
+```
+
+#### More compact code - without potential outcomes
+
+```{r}
+defMSM <- defRead("msmDef.csv")
+defMSM
+```
+
+```{r}
+set.seed(1234)
+dt <- genData(50000, defMSM)
+
+fitA0 <- glm(A0 ~ L0, data = dt, family=binomial)
+fitA1 <- glm(A1 ~ L0 + A0 + L1, data = dt, family=binomial)
+
+dt[, predA0 := predict(fitA0, type = "response")]
+dt[, predA1 := predict(fitA1, type = "response")]
+dt[, wgt := getWeight(predA0, A0, predA1, A1)]
+
+tidy(lm(Y ~ A0 + A1, weights = wgt, data = dt))
+```

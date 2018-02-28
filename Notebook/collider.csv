@@ -1,0 +1,5 @@
+varname,formula,variance,dist,link
+U,0;1,0,uniform,identity
+A,0.5,0,binary,identity
+L,-1.2 + 3*U + 3*A,0,binary,logit
+Y,40 + U*40,9,normal,identity
